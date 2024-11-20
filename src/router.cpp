@@ -5,13 +5,13 @@
 void output_routing_table(int id, const std::map<int, std::pair<int, int>> &routing_table)
 {
     std::ofstream out("routing_table/" + std::to_string(id) + ".txt");
-    out << "路由器 " << id << " 的当前路由表：\n";
+    out << "路由器 " << id << " 的当前路由表：\n\n";
     for (const auto &[dist, val] : routing_table)
     {
         const auto &[cost, next_hop] = val;
-        out << "目的ID: " << dist
-            << "，总花费: " << cost
-            << "，下一跳: " << next_hop << "\n";
+        out << "目的ID:   \t" << dist
+            << "\t总花费: \t" << cost
+            << "\t下一跳: \t" << next_hop << "\n";
     }
     out.close();
     std::this_thread::sleep_for(std::chrono::milliseconds(10)); // 休眠10毫秒
