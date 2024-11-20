@@ -136,8 +136,18 @@ void output_routing_table(int id, const std::map<int, std::pair<int, int>> &rout
 // 获取下一跳路由器ID
 int getNextHop(const std::map<int, std::pair<int, int>> &routing_table, int dest_id)
 {
-    while (dest_id != routing_table.at(dest_id).second)
-        dest_id = routing_table.at(dest_id).second;
+    int old_dest_id = dest_id;
+    try
+    {
+        while (dest_id != routing_table.at(dest_id).second)
+            dest_id = routing_table.at(dest_id).second;
+    }
+    catch (const std::out_of_range &e)
+    {
+        std::cerr << "无法找到目的ID " << old_dest_id << " 的下一跳路由器！" << std::endl;
+        std::cerr << old_dest_id << ' ' << dest_id << std::endl;
+        return -1;
+    }
 
     return dest_id;
 }
@@ -197,10 +207,16 @@ void router(int id)
                     auto [dest_id, val] = *it;
                     auto [cost, _] = val;
 
+                    if (dest_id == id)
+                        continue; // 跳过自身
+
                     // 更新路由表
                     if (local_routing_table.find(dest_id) == local_routing_table.end() || local_routing_table[dest_id].first > local_routing_table[msg.src_id].first + cost)
                     {
                         int next_hop = getNextHop(local_routing_table, msg.src_id);
+
+                        if (next_hop == -1)
+                            continue;
 
                         local_routing_table[dest_id] = {local_routing_table[msg.src_id].first + cost, next_hop};
                         updated = true;
@@ -209,7 +225,7 @@ void router(int id)
             }
         }
 
-        if (updated)
+        if (updated && difftime(time(NULL), last_message_time) * 10 >= TIMEOUT_SECONDS)
         {
             // 发送更新消息给邻居
             for (int neighbor : neighbors)
@@ -225,18 +241,17 @@ void router(int id)
         if (difftime(time(NULL), last_message_time) >= TIMEOUT_SECONDS)
         {
             std::cout << "路由器 " << id << " 超时未接收到消息，终止进程。" << std::endl;
-            break; // 退出循环，终止子进程
+
+            output_routing_table(id, local_routing_table);
+
+            // 关闭消息队列
+            msgctl(msgid, IPC_RMID, NULL);
+
+            exit(EXIT_SUCCESS);
         }
 
-        std::this_thread::sleep_for(std::chrono::milliseconds(100)); // 休眠100毫秒
+        std::this_thread::sleep_for(std::chrono::milliseconds(200)); // 休眠100毫秒
     }
-
-    output_routing_table(id, local_routing_table);
-
-    // 关闭消息队列
-    msgctl(msgid, IPC_RMID, NULL);
-
-    exit(EXIT_SUCCESS);
 }
 
 // 修改add_router函数，接受路由器ID作为参数
