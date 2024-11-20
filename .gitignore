@@ -1,7 +1,12 @@
-.vscode
+# 编译生成的目标文件
+*.o
 
-README.md
-
+# 编译生成的可执行文件
+main
 router
 
-routing_table
+# 编辑器生成的文件
+.vscode/
+
+# 输出结果文件
+routing_table/
