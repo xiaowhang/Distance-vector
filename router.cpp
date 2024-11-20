@@ -209,12 +209,15 @@ void add_router(int id)
     }
 }
 
+// 获取消息队列ID
+int getMsgId(int id)
+{
+    return msgget(MSG_KEY_BASE + id, IPC_CREAT | 0666);
+}
+
 int main()
 {
     init();
-
-    // 创建一个映射，存储路由器ID与消息队列ID的对应关系
-    std::unordered_map<int, int> router_msgids;
 
     // 从拓扑文件中读取路由器ID
     std::ifstream topo_file("test6.txt");
@@ -232,15 +235,11 @@ int main()
         {
             add_router(router1);
             router_ids.insert(router1);
-            int msgid = msgget(MSG_KEY_BASE + router1, IPC_CREAT | 0666);
-            router_msgids[router1] = msgid;
         }
         if (router_ids.find(router2) == router_ids.end())
         {
             add_router(router2);
             router_ids.insert(router2);
-            int msgid = msgget(MSG_KEY_BASE + router2, IPC_CREAT | 0666);
-            router_msgids[router2] = msgid;
         }
 
         // 向router1发送更新消息
@@ -249,7 +248,7 @@ int main()
         std::string serialized1 = serializeRoutingTable({{router2, {cost, router2}}});
         strncpy(msg1.data, serialized1.c_str(), sizeof(msg1.data) - 1);
         msg1.data[sizeof(msg1.data) - 1] = '\0'; // 确保字符串终止
-        msgsnd(router_msgids[router1], &msg1, sizeof(Msg) - sizeof(long), 0);
+        msgsnd(getMsgId(router1), &msg1, sizeof(Msg) - sizeof(long), 0);
 
         // 向router2发送更新消息
         Msg msg2;
@@ -257,7 +256,7 @@ int main()
         std::string serialized2 = serializeRoutingTable({{router1, {cost, router1}}});
         strncpy(msg2.data, serialized2.c_str(), sizeof(msg2.data) - 1);
         msg2.data[sizeof(msg2.data) - 1] = '\0'; // 确保字符串终止
-        msgsnd(router_msgids[router2], &msg2, sizeof(Msg) - sizeof(long), 0);
+        msgsnd(getMsgId(router2), &msg2, sizeof(Msg) - sizeof(long), 0);
     }
     topo_file.close();
 
