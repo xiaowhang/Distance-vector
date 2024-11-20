@@ -19,6 +19,7 @@
 #define MAX_ROUTERS 100
 #define MSG_KEY_BASE 1000
 #define TIMEOUT_SECONDS 2
+#define MANAGER_ID 999
 
 #define MSG_SIZE 1024
 
@@ -29,6 +30,7 @@ int current_routers = 0;
 struct Msg
 {
     long msg_type; // 消息类型，必须 >0
+    int src_id;    // 源ID
     char data[MSG_SIZE];
 };
 
@@ -103,6 +105,18 @@ std::map<int, std::pair<int, int>> deserializeRoutingTable(const std::string &da
     return routing_table;
 }
 
+// 发送更新消息
+void sendUpdateMessage(int srcRouter, int targetRouter, const std::map<int, std::pair<int, int>> &routing_table)
+{
+    Msg msg;
+    msg.msg_type = 1;
+    msg.src_id = srcRouter;
+    std::string serialized = serializeRoutingTable(routing_table);
+    strncpy(msg.data, serialized.c_str(), sizeof(msg.data) - 1);
+    msg.data[sizeof(msg.data) - 1] = '\0'; // 确保字符串终止
+    msgsnd(getMsgId(targetRouter), &msg, sizeof(Msg) - sizeof(long), 0);
+}
+
 // 把路由表输出到文件
 void output_routing_table(int id, const std::map<int, std::pair<int, int>> &routing_table)
 {
@@ -123,10 +137,10 @@ void output_routing_table(int id, const std::map<int, std::pair<int, int>> &rout
 void router(int id)
 {
     // 路由表，键为目的ID，值为（总花费，下一跳ID）
-    std::map<int, std::pair<int, int>> routing_table;
+    std::map<int, std::pair<int, int>> local_routing_table;
 
     // 初始化路由表，先添加自身信息
-    routing_table[id] = {0, id};
+    local_routing_table[id] = {0, id};
 
     // 创建消息队列，用于接收主进程的更新
     key_t key = MSG_KEY_BASE + id;
@@ -149,7 +163,7 @@ void router(int id)
         {
             std::string data_received(msg.data);
 
-            if (msg.msg_type == 1)
+            if (msg.src_id == MANAGER_ID) // 主进程发送的更新消息
             {
                 auto [dest_id, val] = *deserializeRoutingTable(data_received).begin();
                 auto [cost, next_hop] = val;
@@ -157,9 +171,9 @@ void router(int id)
                 neighbors.insert(dest_id);
 
                 // 更新路由表
-                if (routing_table.find(dest_id) == routing_table.end() || routing_table[dest_id].first > cost)
+                if (local_routing_table.find(dest_id) == local_routing_table.end() || local_routing_table[dest_id].first > cost)
                 {
-                    routing_table[dest_id] = {cost, next_hop};
+                    local_routing_table[dest_id] = {cost, next_hop};
                     last_message_time = time(NULL); // 刷新倒计时
                 }
             }
@@ -178,7 +192,7 @@ void router(int id)
         std::this_thread::sleep_for(std::chrono::milliseconds(100)); // 休眠100毫秒
     }
 
-    output_routing_table(id, routing_table);
+    output_routing_table(id, local_routing_table);
 
     // 关闭消息队列
     msgctl(msgid, IPC_RMID, NULL);
@@ -244,21 +258,9 @@ int main()
             router_ids.insert(router2);
         }
 
-        // 向router1发送更新消息
-        Msg msg1;
-        msg1.msg_type = 1;
-        std::string serialized1 = serializeRoutingTable({{router2, {cost, router2}}});
-        strncpy(msg1.data, serialized1.c_str(), sizeof(msg1.data) - 1);
-        msg1.data[sizeof(msg1.data) - 1] = '\0'; // 确保字符串终止
-        msgsnd(getMsgId(router1), &msg1, sizeof(Msg) - sizeof(long), 0);
-
-        // 向router2发送更新消息
-        Msg msg2;
-        msg2.msg_type = 1;
-        std::string serialized2 = serializeRoutingTable({{router1, {cost, router1}}});
-        strncpy(msg2.data, serialized2.c_str(), sizeof(msg2.data) - 1);
-        msg2.data[sizeof(msg2.data) - 1] = '\0'; // 确保字符串终止
-        msgsnd(getMsgId(router2), &msg2, sizeof(Msg) - sizeof(long), 0);
+        // 发送初始化消息
+        sendUpdateMessage(MANAGER_ID, router1, {{router2, {cost, router2}}});
+        sendUpdateMessage(MANAGER_ID, router2, {{router1, {cost, router1}}});
     }
     topo_file.close();
 
