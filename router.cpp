@@ -149,7 +149,7 @@ void router(int id)
     std::map<int, std::pair<int, int>> local_routing_table;
 
     // 初始化路由表，先添加自身信息
-    local_routing_table[id] = {0, -1};
+    local_routing_table[id] = {0, id};
 
     // 创建消息队列，用于接收主进程的更新
     key_t key = MSG_KEY_BASE + id;
