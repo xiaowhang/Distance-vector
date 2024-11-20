@@ -133,6 +133,15 @@ void output_routing_table(int id, const std::map<int, std::pair<int, int>> &rout
     std::this_thread::sleep_for(std::chrono::milliseconds(10)); // 休眠10毫秒
 }
 
+// 获取下一跳路由器ID
+int getNextHop(const std::map<int, std::pair<int, int>> &routing_table, int dest_id)
+{
+    while (dest_id != routing_table.at(dest_id).second)
+        dest_id = routing_table.at(dest_id).second;
+
+    return dest_id;
+}
+
 // 路由器进程函数
 void router(int id)
 {
@@ -186,14 +195,14 @@ void router(int id)
                 for (auto it = reveived_routing_table.begin(); it != reveived_routing_table.end(); it++)
                 {
                     auto [dest_id, val] = *it;
-                    auto [cost, next_hop] = val;
-
-                    neighbors.insert(msg.src_id);
+                    auto [cost, _] = val;
 
                     // 更新路由表
                     if (local_routing_table.find(dest_id) == local_routing_table.end() || local_routing_table[dest_id].first > local_routing_table[msg.src_id].first + cost)
                     {
-                        local_routing_table[dest_id] = {local_routing_table[msg.src_id].first + cost, msg.src_id};
+                        int next_hop = getNextHop(local_routing_table, msg.src_id);
+
+                        local_routing_table[dest_id] = {local_routing_table[msg.src_id].first + cost, next_hop};
                         updated = true;
                     }
                 }
