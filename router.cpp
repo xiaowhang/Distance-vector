@@ -32,6 +32,12 @@ struct Msg
     char data[MSG_SIZE];
 };
 
+// 获取消息队列ID
+int getMsgId(int id)
+{
+    return msgget(MSG_KEY_BASE + id, IPC_CREAT | 0666);
+}
+
 void init()
 {
     // 捕获SIGCHLD信号，防止僵尸进程
@@ -133,7 +139,7 @@ void router(int id)
 
     time_t last_message_time = time(NULL); // 初始化最后消息时间
 
-    std::unordered_map<int, int> router_msgids; // 存储路由器ID与消息队列ID的对应关系
+    std::unordered_set<int> neighbors; // 邻居路由器ID
 
     while (true)
     {
@@ -147,6 +153,8 @@ void router(int id)
             {
                 auto [dest_id, val] = *deserializeRoutingTable(data_received).begin();
                 auto [cost, next_hop] = val;
+
+                neighbors.insert(dest_id);
 
                 // 更新路由表
                 if (routing_table.find(dest_id) == routing_table.end() || routing_table[dest_id].first > cost)
@@ -207,12 +215,6 @@ void add_router(int id)
         std::cout << "添加路由器 " << id << "，PID: " << pid << std::endl;
         current_routers++;
     }
-}
-
-// 获取消息队列ID
-int getMsgId(int id)
-{
-    return msgget(MSG_KEY_BASE + id, IPC_CREAT | 0666);
 }
 
 int main()
