@@ -140,7 +140,7 @@ void router(int id)
     std::map<int, std::pair<int, int>> local_routing_table;
 
     // 初始化路由表，先添加自身信息
-    local_routing_table[id] = {0, id};
+    local_routing_table[id] = {0, -1};
 
     // 创建消息队列，用于接收主进程的更新
     key_t key = MSG_KEY_BASE + id;
@@ -154,6 +154,8 @@ void router(int id)
     time_t last_message_time = time(NULL); // 初始化最后消息时间
 
     std::unordered_set<int> neighbors; // 邻居路由器ID
+
+    bool updated = false; // 是否更新过路由表
 
     while (true)
     {
@@ -174,12 +176,40 @@ void router(int id)
                 if (local_routing_table.find(dest_id) == local_routing_table.end() || local_routing_table[dest_id].first > cost)
                 {
                     local_routing_table[dest_id] = {cost, next_hop};
-                    last_message_time = time(NULL); // 刷新倒计时
+                    updated = true;
                 }
             }
             else
             {
+                auto reveived_routing_table = deserializeRoutingTable(data_received);
+
+                for (auto it = reveived_routing_table.begin(); it != reveived_routing_table.end(); it++)
+                {
+                    auto [dest_id, val] = *it;
+                    auto [cost, next_hop] = val;
+
+                    neighbors.insert(msg.src_id);
+
+                    // 更新路由表
+                    if (local_routing_table.find(dest_id) == local_routing_table.end() || local_routing_table[dest_id].first > local_routing_table[msg.src_id].first + cost)
+                    {
+                        local_routing_table[dest_id] = {local_routing_table[msg.src_id].first + cost, msg.src_id};
+                        updated = true;
+                    }
+                }
             }
+        }
+
+        if (updated)
+        {
+            // 发送更新消息给邻居
+            for (int neighbor : neighbors)
+            {
+                sendUpdateMessage(id, neighbor, local_routing_table);
+            }
+
+            updated = false;
+            last_message_time = time(NULL); // 刷新倒计时
         }
 
         // 检查是否超时
