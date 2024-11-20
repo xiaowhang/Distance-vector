@@ -20,7 +20,6 @@ void output_routing_table(int id, const std::map<int, std::pair<int, int>> &rout
 // 获取下一跳路由器ID
 int getNextHop(const std::map<int, std::pair<int, int>> &routing_table, int dest_id)
 {
-    int old_dest_id = dest_id;
     try
     {
         while (dest_id != routing_table.at(dest_id).second)
@@ -28,8 +27,8 @@ int getNextHop(const std::map<int, std::pair<int, int>> &routing_table, int dest
     }
     catch (const std::out_of_range &e)
     {
-        std::cerr << "无法找到目的ID " << old_dest_id << " 的下一跳路由器！" << std::endl;
-        std::cerr << old_dest_id << ' ' << dest_id << std::endl;
+        // std::cerr << "无法找到目的ID " << old_dest_id << " 的下一跳路由器！" << std::endl;
+        // std::cerr << old_dest_id << ' ' << dest_id << std::endl;
         return -1;
     }
 
