@@ -36,7 +36,7 @@ void add_router(int id)
     }
 }
 
-int main()
+int main(int argc, char *argv[])
 {
     // 捕获SIGCHLD信号，防止僵尸进程
     signal(SIGCHLD, SIG_IGN);
@@ -46,8 +46,14 @@ int main()
         std::filesystem::remove_all("routing_table");
     std::filesystem::create_directory("routing_table");
 
+    if (argc != 2)
+    {
+        std::cerr << "用法: " << argv[0] << " <拓扑文件>" << std::endl;
+        return -1;
+    }
+
     // 从拓扑文件中读取路由器ID
-    std::ifstream topo_file("test6.txt");
+    std::ifstream topo_file(argv[1]);
     if (!topo_file)
     {
         std::cerr << "无法打开拓扑文件！" << std::endl;
