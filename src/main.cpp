@@ -2,17 +2,22 @@
 #include "utils.h"
 #include "router.h"
 
-std::vector<pid_t> children;
-int current_routers = 0;
+std::vector<pid_t> children;        // 子进程ID
+std::unordered_set<int> router_ids; // 使用unordered_set自动去重
 
 // 添加路由器
 void add_router(int id)
 {
-    if (current_routers >= MAX_ROUTERS)
+    if (router_ids.count(id))
+        return;
+
+    if (router_ids.size() >= MAX_ROUTERS)
     {
         std::cerr << "已达到最大路由器数量！" << std::endl;
         return;
     }
+
+    router_ids.insert(id);
 
     pid_t pid = fork();
     if (pid < 0)
@@ -32,7 +37,6 @@ void add_router(int id)
         // 父进程记录子进程ID
         children.push_back(pid);
         std::cout << "添加路由器 " << id << "，PID: " << pid << std::endl;
-        current_routers++;
     }
 }
 
@@ -60,22 +64,13 @@ int main(int argc, char *argv[])
         return -1;
     }
 
-    std::unordered_set<int> router_ids; // 使用unordered_set自动去重
+    // 添加路由器
     int router1, router2, cost;
     while (topo_file >> router1 >> router2 >> cost)
     {
-        if (router_ids.find(router1) == router_ids.end())
-        {
-            add_router(router1);
-            router_ids.insert(router1);
-        }
-        if (router_ids.find(router2) == router_ids.end())
-        {
-            add_router(router2);
-            router_ids.insert(router2);
-        }
+        add_router(router1);
+        add_router(router2);
 
-        // 发送初始化消息
         sendUpdateMessage(MANAGER_ID, router1, {{router2, {cost, router2}}});
         sendUpdateMessage(MANAGER_ID, router2, {{router1, {cost, router1}}});
     }
