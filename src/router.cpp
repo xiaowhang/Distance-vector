@@ -27,8 +27,7 @@ int getNextHop(const std::map<int, std::pair<int, int>> &routing_table, int dest
     }
     catch (const std::out_of_range &e)
     {
-        // std::cerr << "无法找到目的ID " << old_dest_id << " 的下一跳路由器！" << std::endl;
-        // std::cerr << old_dest_id << ' ' << dest_id << std::endl;
+        std::cerr << "无法找到目的ID " << dest_id << " 的下一跳路由器！" << std::endl;
         return -1;
     }
 
@@ -44,20 +43,14 @@ void router(int id)
     // 初始化路由表，先添加自身信息
     local_routing_table[id] = {0, id};
 
-    // 创建消息队列，用于接收主进程的更新
-    key_t key = MSG_KEY_BASE + id;
-    int msgid = msgget(key, IPC_CREAT | 0666);
-    if (msgid < 0)
-    {
-        std::cerr << "路由器 " << id << " 创建消息队列失败！" << std::endl;
-        exit(EXIT_FAILURE);
-    }
-
-    time_t last_message_time = time(NULL); // 初始化最后消息时间
+    int msgid = getMsgId(id);
 
     std::unordered_set<int> neighbors; // 邻居路由器ID
 
+    auto last_message_time = std::chrono::high_resolution_clock::now();
+
     bool updated = false; // 是否更新过路由表
+    bool awake = false;   // 是否被唤醒
 
     while (true)
     {
@@ -67,33 +60,44 @@ void router(int id)
         {
             std::string data_received(msg.data);
 
-            if (msg.src_id == MANAGER_ID) // 主进程发送的更新消息
+            // std::cout << "Router " << id << " received msg_type: " << msg.msg_type << std::endl;
+
+            if (msg.msg_type == MSG_TYPE_INIT)
             {
-                auto [dest_id, val] = *deserializeRoutingTable(data_received).begin();
-                auto [cost, next_hop] = val;
+                auto received_routing_table = deserializeRoutingTable(data_received);
 
-                neighbors.insert(dest_id);
-
-                // 更新路由表
-                if (local_routing_table.find(dest_id) == local_routing_table.end() || local_routing_table[dest_id].first > cost)
+                for (auto [dest_id, info] : received_routing_table)
                 {
-                    local_routing_table[dest_id] = {cost, next_hop};
-                    updated = true;
+                    // std::cout << "路由器 " << id << " 收到初始化消息：" << dest_id << std::endl;
+                    auto [cost, next_hop] = info;
+
+                    neighbors.insert(dest_id);
+
+                    // 尝试更新路由表
+                    if (local_routing_table.find(dest_id) == local_routing_table.end() || local_routing_table[dest_id].first > cost)
+                        local_routing_table[dest_id] = {cost, next_hop};
                 }
             }
-            else
+            else if (msg.msg_type == MSG_TYPE_WAKE)
             {
-                auto reveived_routing_table = deserializeRoutingTable(data_received);
+                std::cout << "路由器 " << id << " 收到唤醒消息。" << std::endl;
+                last_message_time = std::chrono::high_resolution_clock::now(); // 初始化最后消息时间
+                for (int neighbor : neighbors)
+                    sendMessage(MSG_TYPE_UPDATE, id, neighbor, local_routing_table); // 发送更新消息给邻居
+                awake = true;
+            }
+            else if (msg.msg_type == MSG_TYPE_UPDATE)
+            {
+                auto received_routing_table = deserializeRoutingTable(data_received);
 
-                for (auto it = reveived_routing_table.begin(); it != reveived_routing_table.end(); it++)
+                for (auto [dest_id, info] : received_routing_table)
                 {
-                    auto [dest_id, val] = *it;
-                    auto [cost, _] = val;
+                    auto [cost, _] = info;
 
                     if (dest_id == id)
                         continue; // 跳过自身
 
-                    // 更新路由表
+                    // 尝试更新路由表
                     if (local_routing_table.find(dest_id) == local_routing_table.end() || local_routing_table[dest_id].first > local_routing_table[msg.src_id].first + cost)
                     {
                         int next_hop = getNextHop(local_routing_table, msg.src_id);
@@ -102,37 +106,40 @@ void router(int id)
                             continue;
 
                         local_routing_table[dest_id] = {local_routing_table[msg.src_id].first + cost, next_hop};
+
+                        // std::cout << "路由器 " << id << " 更新路由表：" << dest_id << std::endl;
                         updated = true;
+
+                        sendMessage(MSG_TYPE_REFRESH, id, MANAGER_ID, {}); // 通知主进程网络存在更新
                     }
                 }
+                continue;
+            }
+            else if (msg.msg_type == MSG_TYPE_TERMINATE)
+            {
+                std::cout << "路由器 " << id << " 收到终止消息，终止进程。" << std::endl;
+
+                output_routing_table(id, local_routing_table);
+
+                // 关闭消息队列
+                msgctl(msgid, IPC_RMID, NULL);
+
+                exit(EXIT_SUCCESS);
             }
         }
 
-        if (updated && difftime(time(NULL), last_message_time) * 10 >= TIMEOUT_SECONDS)
+        auto now = std::chrono::high_resolution_clock::now();
+        if (awake && updated && calculateTimeDifference(last_message_time, now) * 20 >= TIMEOUT_MILLISECONDS)
         {
+            std::cout << "路由器 " << id << " 发送更新后的路由表。" << std::endl;
             // 发送更新消息给邻居
             for (int neighbor : neighbors)
-            {
-                sendUpdateMessage(id, neighbor, local_routing_table);
-            }
+                sendMessage(MSG_TYPE_UPDATE, id, neighbor, local_routing_table);
 
             updated = false;
-            last_message_time = time(NULL); // 刷新倒计时
+            last_message_time = std::chrono::high_resolution_clock::now(); // 刷新倒计时
         }
 
-        // 检查是否超时
-        if (difftime(time(NULL), last_message_time) >= TIMEOUT_SECONDS)
-        {
-            std::cout << "路由器 " << id << " 超时未接收到消息，终止进程。" << std::endl;
-
-            output_routing_table(id, local_routing_table);
-
-            // 关闭消息队列
-            msgctl(msgid, IPC_RMID, NULL);
-
-            exit(EXIT_SUCCESS);
-        }
-
-        std::this_thread::sleep_for(std::chrono::milliseconds(200)); // 休眠100毫秒
+        std::this_thread::sleep_for(std::chrono::milliseconds(10)); // 休眠10毫秒
     }
 }
