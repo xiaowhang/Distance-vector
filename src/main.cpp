@@ -3,14 +3,14 @@
 #include "router.h"
 
 /**
- * @brief 添加一个新的路由器。
+ * @brief 添加一个新的路由器进程
  *
- * 该函数会创建一个新的子进程作为路由器，并将其ID记录在children列表中。
+ * 此函数用于向网络中添加一个新的路由器，初始化其消息队列，并将其ID记录在children列表中。
  * 如果路由器ID已经存在或达到最大路由器数量，则不会添加新的路由器。
  *
- * @param id 路由器的唯一标识符。
- * @param children 存储所有子进程ID。
- * @param router_ids 存储所有路由器ID的集合。
+ * @param id 要添加的路由器的唯一标识符
+ * @param children 存储所有路由器子进程的PID
+ * @param router_ids 存储已存在的路由器ID的集合，用于快速查重
  */
 void add_router(int id, std::vector<pid_t> &children, std::unordered_set<int> &router_ids)
 {
@@ -55,6 +55,17 @@ void add_router(int id, std::vector<pid_t> &children, std::unordered_set<int> &r
     }
 }
 
+/**
+ * @brief 主函数，距离向量路由算法模拟的入口点。
+ *
+ * 该函数根据提供的拓扑文件初始化路由器，启动路由计算过程，并处理管理器与各路由器之间的进程间通信。
+ * 它负责创建和管理子进程，发送初始化、唤醒和终止消息，并监控路由器的状态，以确保路由算法正确执行。
+ *
+ * @param argc 命令行参数的数量。
+ * @param argv 命令行参数的数组。
+ *             argv[1] 应该是拓扑文件的路径。
+ * @return int 成功执行返回 0，发生错误返回 -1。
+ */
 int main(int argc, char *argv[])
 {
     std::vector<pid_t> children;        // 子进程ID

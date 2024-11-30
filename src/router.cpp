@@ -1,7 +1,12 @@
 #include "utils.h"
 #include "common.h"
 
-// 把路由表输出到文件
+/**
+ * @brief 输出路由器的当前路由表到文件。
+ *
+ * @param id 路由器的ID。
+ * @param routing_table 路由表，键为目的ID，值为总花费和下一跳ID的pair。
+ */
 void output_routing_table(int id, const std::map<int, std::pair<int, int>> &routing_table)
 {
     std::ofstream out("routing_table/" + std::to_string(id) + ".txt");
@@ -17,7 +22,16 @@ void output_routing_table(int id, const std::map<int, std::pair<int, int>> &rout
     std::this_thread::sleep_for(std::chrono::milliseconds(10)); // 休眠10毫秒
 }
 
-// 获取下一跳路由器ID
+/**
+ * @brief 获取指定目的节点的下一跳路由器ID。
+ *
+ * 此函数通过在路由表中迭代查找，返回到达指定目的节点所需的下一跳路由器ID。
+ * 如果在路由表中无法找到目的ID对应的路由信息，函数将返回-1，并输出错误信息。
+ *
+ * @param routing_table 路由表，键为目的节点ID，值为一个包含距离和下一跳节点ID的pair。
+ * @param dest_id 目标路由器的ID。
+ * @return int 下一跳路由器的ID；如果未找到，则返回-1。
+ */
 int getNextHop(const std::map<int, std::pair<int, int>> &routing_table, int dest_id)
 {
     try
@@ -34,7 +48,19 @@ int getNextHop(const std::map<int, std::pair<int, int>> &routing_table, int dest
     return dest_id;
 }
 
-// 路由器进程函数
+/**
+ * 路由器函数，模拟基于距离向量算法的路由器行为。
+ *
+ * @param id 路由器自身的ID。
+ *
+ * 该函数负责处理消息接收、路由表更新以及与邻居路由器的通信等。
+ * 主要功能包括：
+ * - 初始化路由表，包含自身信息。
+ * - 接收并处理不同类型的消息（初始化、唤醒、更新、终止）。
+ * - 根据距离向量算法更新本地路由表。
+ * - 与邻居路由器交换路由信息，传播路由更新。
+ * - 在接收到终止消息时，输出路由表并关闭消息队列。
+ */
 void router(int id)
 {
     // 路由表，键为目的ID，值为（总花费，下一跳ID）
