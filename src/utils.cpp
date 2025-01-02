@@ -139,3 +139,25 @@ long long calculateTimeDifference(std::chrono::high_resolution_clock::time_point
 {
     return std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
 }
+
+/**
+ * @brief 向所有邻居路由器发送更新消息。
+ *
+ * @param id 路由器ID。
+ * @param local_routing_table 本地路由表。
+ * @param neighbors 邻居路由器ID集合。
+ */
+void sendUpdateToNeighbors(int id, std::map<int, std::pair<int, int>> &local_routing_table, std::unordered_set<int> &neighbors)
+{
+    for (int neighbor : neighbors)
+    {
+        auto route_info = local_routing_table;
+        for (auto &[dest_id, info] : route_info)
+        {
+            if (info.second == neighbor)
+                info.first = INF; // 毒性逆转
+        }
+
+        sendMessage(MSG_TYPE_UPDATE, id, neighbor, route_info);
+    }
+}

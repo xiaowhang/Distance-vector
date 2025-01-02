@@ -75,6 +75,6 @@ $ cat routing_table/2.txt
 
 ## Todo
 
-- [ ] 实现“水平分割” (split-horizon)
-- [ ] 实现“触发更新” (triggered-updates)
+- [x] 实现“毒性逆转” (Poison Reverse)
+- [x] 实现“触发更新” (Triggered Updates)
 - [ ] 实现扩展的贝尔曼-福特算法（“源跟踪”功能）

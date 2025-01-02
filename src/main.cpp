@@ -134,7 +134,7 @@ int main(int argc, char *argv[])
         if (calculateTimeDifference(last_message_time, now) >= TIMEOUT_MILLISECONDS)
             break;
 
-        std::this_thread::sleep_for(std::chrono::milliseconds(100)); // 休眠100毫秒
+        std::this_thread::sleep_for(std::chrono::milliseconds(10)); // 休眠10毫秒
     }
 
     // 发送终止消息
